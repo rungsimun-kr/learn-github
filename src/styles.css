@@ -345,11 +345,28 @@ code {
   background: var(--surface-2);
 }
 
-.thumb img {
+/* The frame turns as one, so annotations stay pinned to the page under them. */
+.thumb-frame {
+  position: relative;
+  display: block;
   max-width: 100%;
   max-height: 100%;
+  line-height: 0;
   box-shadow: 0 1px 4px rgb(0 0 0 / 25%);
   transition: transform 120ms ease;
+}
+
+.thumb img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.page-open {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
 }
 
 .thumb-empty {
@@ -481,6 +498,198 @@ code {
   }
 
   .toolbar-end {
+    margin-left: 0;
+  }
+}
+
+/* --------------------------------------------------- annotations */
+
+/*
+ * The same face the exported PDF uses, so a text box previews at the size and
+ * shape it will actually print. Only downloaded once a text box exists.
+ */
+@font-face {
+  font-family: 'Sarabun';
+  src: url('./assets/fonts/Sarabun-Regular.ttf') format('truetype');
+  font-display: swap;
+}
+
+.annotation-layer,
+.handle-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.annotation-layer .is-selected {
+  outline: 1px dashed var(--accent);
+  outline-offset: 2px;
+}
+
+.annotation-text {
+  font-family: 'Sarabun', system-ui, sans-serif;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.handle {
+  fill: var(--surface);
+  stroke: var(--accent);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+/* ------------------------------------------------- page editor */
+
+.page-editor {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.editor-header,
+.editor-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  align-items: center;
+  padding: 10px 20px;
+  background: var(--surface);
+}
+
+.editor-header {
+  border-bottom: 1px solid var(--border);
+}
+
+.editor-footer {
+  justify-content: space-between;
+  border-top: 1px solid var(--border);
+}
+
+.editor-title {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.editor-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-left: auto;
+}
+
+.editor-surface {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  padding: 20px;
+  overflow: auto;
+}
+
+.editor-stage {
+  position: relative;
+  flex: none;
+  background: #fff;
+  box-shadow: var(--shadow);
+  touch-action: none;
+  user-select: none;
+}
+
+.editor-stage img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.editor-stage.tool-select {
+  cursor: default;
+}
+
+.editor-stage:not(.tool-select) {
+  cursor: crosshair;
+}
+
+.annotation-input {
+  position: absolute;
+  z-index: 2;
+  padding: 0;
+  border: 1px dashed var(--accent);
+  background: rgb(255 255 255 / 75%);
+  font-family: 'Sarabun', system-ui, sans-serif;
+  resize: none;
+}
+
+/* --------------------------------------------- annotation toolbar */
+
+.annotation-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  align-items: center;
+}
+
+.tool-row,
+.style-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: center;
+}
+
+.tool-row {
+  gap: 4px;
+}
+
+.tool-button {
+  width: 34px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tool-button.is-active {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.swatches {
+  display: flex;
+  gap: 4px;
+}
+
+.swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.swatch.is-active {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.style-row input[type='range'] {
+  width: 90px;
+}
+
+@media (width <= 900px) {
+  .editor-actions {
     margin-left: 0;
   }
 }

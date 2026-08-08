@@ -1,6 +1,7 @@
 import JSZip from 'jszip';
 import type { ImageFormat, LoadedDoc, PageItem } from '../types';
 import { buildPdf } from './build';
+import { openForRender } from './docs';
 import { safeFilename } from './download';
 import type { PageRange } from './ranges';
 import { renderPageImage } from './render';
@@ -81,27 +82,28 @@ export async function exportImages(
   const safeBase = safeFilename(options.baseName);
   const extension = options.format === 'jpeg' ? 'jpg' : 'png';
 
-  const renderAt = async (page: PageItem): Promise<Blob> => {
-    const doc = docs.get(page.docId);
-    if (!doc) throw new Error('A page refers to a file that is no longer loaded.');
-    return renderPageImage(doc, page.pageIndex, {
-      rotation: page.rotation,
+  // Render the assembled document rather than the original files, so rotation
+  // and annotations are already baked in and there is only one way to draw a
+  // page — the same one that produces the downloaded PDF.
+  const assembled = await openForRender(await buildPdf(pages, docs));
+
+  const renderAt = (index: number): Promise<Blob> =>
+    renderPageImage(assembled, index, {
       scale: options.scale,
       format: options.format,
       quality: options.quality,
     });
-  };
 
   if (pages.length === 1) {
-    const blob = await renderAt(pages[0]);
+    const blob = await renderAt(0);
     onProgress?.(1, 1);
     return { blob, filename: `${safeBase}.${extension}` };
   }
 
   const zip = new JSZip();
   const width = String(pages.length).length;
-  for (const [position, page] of pages.entries()) {
-    const blob = await renderAt(page);
+  for (const position of pages.keys()) {
+    const blob = await renderAt(position);
     zip.file(`${safeBase} page ${pad(position + 1, width)}.${extension}`, blob);
     onProgress?.(position + 1, pages.length);
   }

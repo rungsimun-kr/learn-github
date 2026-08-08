@@ -13,6 +13,7 @@ interface PageCardProps {
   onRotate: (id: string, delta: 90 | -90) => void;
   onDelete: (id: string) => void;
   onNudge: (id: string, direction: -1 | 1) => void;
+  onOpen: (id: string) => void;
   onDragStart: (event: DragEvent<HTMLElement>, id: string) => void;
   onDragOver: (event: DragEvent<HTMLElement>, id: string) => void;
   onDrop: (event: DragEvent<HTMLElement>, id: string) => void;
@@ -30,6 +31,7 @@ export default function PageCard({
   onRotate,
   onDelete,
   onNudge,
+  onOpen,
   onDragStart,
   onDragOver,
   onDrop,
@@ -60,12 +62,21 @@ export default function PageCard({
         <span className="page-number">{position}</span>
       </label>
 
-      <Thumbnail
-        doc={doc}
-        pageIndex={page.pageIndex}
-        rotation={page.rotation}
-        label={`Preview of ${sourceLabel}`}
-      />
+      <button
+        type="button"
+        className="page-open"
+        title="Open this page to draw on it"
+        aria-label={`Annotate page ${position}`}
+        onClick={() => onOpen(page.id)}
+      >
+        <Thumbnail
+          doc={doc}
+          pageIndex={page.pageIndex}
+          rotation={page.rotation}
+          label={`Preview of ${sourceLabel}`}
+          annotations={page.annotations}
+        />
+      </button>
 
       {showSource ? (
         <p className="page-source" title={sourceLabel}>

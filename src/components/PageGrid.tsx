@@ -10,6 +10,7 @@ interface PageGridProps {
   onRotate: (id: string, delta: 90 | -90) => void;
   onDelete: (id: string) => void;
   onNudge: (id: string, direction: -1 | 1) => void;
+  onOpen: (id: string) => void;
   onReorder: (draggedId: string, targetId: string, side: 'before' | 'after') => void;
 }
 
@@ -26,6 +27,7 @@ export default function PageGrid({
   onRotate,
   onDelete,
   onNudge,
+  onOpen,
   onReorder,
 }: PageGridProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -78,6 +80,7 @@ export default function PageGrid({
           onRotate={onRotate}
           onDelete={onDelete}
           onNudge={onNudge}
+          onOpen={onOpen}
           onDragStart={handleDragStart}
           onDragOver={handleDragOver}
           onDrop={handleDrop}

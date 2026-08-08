@@ -7,6 +7,7 @@ interface ToolbarProps {
   busy: boolean;
   onAdd: () => void;
   onInsert: () => void;
+  onAnnotate: () => void;
   onRotate: (delta: 90 | -90) => void;
   onDelete: () => void;
   onSelectAll: () => void;
@@ -29,6 +30,7 @@ export default function Toolbar(props: ToolbarProps) {
     busy,
     onAdd,
     onInsert,
+    onAnnotate,
     onRotate,
     onDelete,
     onSelectAll,
@@ -62,6 +64,15 @@ export default function Toolbar(props: ToolbarProps) {
       </div>
 
       <div className="toolbar-group">
+        <button
+          type="button"
+          className="button"
+          onClick={onAnnotate}
+          disabled={busy || empty}
+          title="Draw text, boxes and arrows on a page"
+        >
+          ✎ Annotate
+        </button>
         <button
           type="button"
           className="button"

@@ -73,6 +73,14 @@ function describeLoadError(filename: string, error: unknown): string {
   return `"${filename}" could not be opened — it may be damaged. (${message})`;
 }
 
+/**
+ * Open freshly built PDF bytes for rendering. Lives here so every caller goes
+ * through the same worker setup above.
+ */
+export function openForRender(bytes: Uint8Array) {
+  return getDocument({ data: bytes.slice() }).promise;
+}
+
 /** Fresh page items covering every page of a newly loaded document. */
 export function pagesForDoc(doc: LoadedDoc): PageItem[] {
   return Array.from({ length: doc.pageCount }, (_, pageIndex) => ({
@@ -80,6 +88,7 @@ export function pagesForDoc(doc: LoadedDoc): PageItem[] {
     docId: doc.id,
     pageIndex,
     rotation: 0 as const,
+    annotations: [],
     selected: false,
   }));
 }

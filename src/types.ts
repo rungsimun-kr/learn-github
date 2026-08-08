@@ -1,5 +1,6 @@
 import type { PDFDocument } from 'pdf-lib';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
+import type { Annotation } from './lib/annotations';
 
 /** A PDF file the user has loaded, kept open by both PDF libraries. */
 export interface LoadedDoc {
@@ -32,6 +33,11 @@ export interface PageItem {
   pageIndex: number;
   /** Extra rotation applied on top of the page's own, in degrees. */
   rotation: 0 | 90 | 180 | 270;
+  /**
+   * Marks drawn on this page, in PDF user space on the unrotated page. They
+   * travel with the item, so reordering, copying and undo all cover them.
+   */
+  annotations: Annotation[];
   selected: boolean;
 }
 

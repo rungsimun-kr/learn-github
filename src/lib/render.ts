@@ -1,4 +1,6 @@
+import type { PDFDocumentProxy } from 'pdfjs-dist';
 import type { ImageFormat, LoadedDoc } from '../types';
+import type { PageGeometry } from './geometry';
 
 const THUMBNAIL_WIDTH = 240;
 const MAX_CONCURRENT_RENDERS = 3;
@@ -30,11 +32,11 @@ async function withRenderSlot<T>(job: () => Promise<T>): Promise<T> {
  * added to the rotation already baked into the page.
  */
 export async function renderPage(
-  doc: LoadedDoc,
+  jsDoc: PDFDocumentProxy,
   pageIndex: number,
   options: { scale?: number; width?: number; rotation?: number; background?: string },
 ): Promise<HTMLCanvasElement> {
-  const page = await doc.jsDoc.getPage(pageIndex + 1);
+  const page = await jsDoc.getPage(pageIndex + 1);
   const rotation = (((page.rotate + (options.rotation ?? 0)) % 360) + 360) % 360;
 
   const unscaled = page.getViewport({ scale: 1, rotation });
@@ -63,17 +65,48 @@ function canvasToBlob(canvas: HTMLCanvasElement, format: ImageFormat, quality: n
 
 /** Render a page as a PNG or JPEG image. JPEG gets a white backdrop. */
 export async function renderPageImage(
-  doc: LoadedDoc,
+  jsDoc: PDFDocumentProxy,
   pageIndex: number,
   options: { rotation?: number; scale: number; format: ImageFormat; quality?: number },
 ): Promise<Blob> {
   return withRenderSlot(async () => {
-    const canvas = await renderPage(doc, pageIndex, {
+    const canvas = await renderPage(jsDoc, pageIndex, {
       scale: options.scale,
       rotation: options.rotation,
       background: options.format === 'jpeg' ? '#ffffff' : undefined,
     });
     return canvasToBlob(canvas, options.format, options.quality ?? 0.92);
+  });
+}
+
+/**
+ * A page's unrotated size plus the total rotation the viewer sees, which is
+ * what annotation coordinates are expressed against.
+ */
+export async function getPageGeometry(
+  jsDoc: PDFDocumentProxy,
+  pageIndex: number,
+  extraRotation = 0,
+): Promise<PageGeometry> {
+  const page = await jsDoc.getPage(pageIndex + 1);
+  const unrotated = page.getViewport({ scale: 1, rotation: 0 });
+  return {
+    width: unrotated.width,
+    height: unrotated.height,
+    rotation: (((page.rotate + extraRotation) % 360) + 360) % 360,
+  };
+}
+
+/** A full-size page image for the editor. The caller owns the object URL. */
+export async function renderPageUrl(
+  jsDoc: PDFDocumentProxy,
+  pageIndex: number,
+  options: { scale: number; rotation?: number },
+): Promise<string> {
+  return withRenderSlot(async () => {
+    const canvas = await renderPage(jsDoc, pageIndex, { ...options, background: '#ffffff' });
+    const blob = await canvasToBlob(canvas, 'png', 1);
+    return URL.createObjectURL(blob);
   });
 }
 
@@ -95,7 +128,7 @@ export function getThumbnail(doc: LoadedDoc, pageIndex: number): Promise<string>
   if (cached) return cached;
 
   const pending = withRenderSlot(async () => {
-    const canvas = await renderPage(doc, pageIndex, {
+    const canvas = await renderPage(doc.jsDoc, pageIndex, {
       width: THUMBNAIL_WIDTH,
       background: '#ffffff',
     });

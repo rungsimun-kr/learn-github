@@ -1,6 +1,7 @@
 import { PDFDocument, degrees } from 'pdf-lib';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { buildPdf, selectPages, type PdfSource } from './build';
+import type { Annotation } from './annotations';
 import type { PageItem } from '../types';
 
 /**
@@ -16,8 +17,20 @@ async function makeFixture(pageCount: number, rotations: number[] = []): Promise
   return doc;
 }
 
-function item(docId: string, pageIndex: number, rotation: PageItem['rotation'] = 0): PageItem {
-  return { id: `${docId}:${pageIndex}:${rotation}`, docId, pageIndex, rotation, selected: false };
+function item(
+  docId: string,
+  pageIndex: number,
+  rotation: PageItem['rotation'] = 0,
+  annotations: Annotation[] = [],
+): PageItem {
+  return {
+    id: `${docId}:${pageIndex}:${rotation}`,
+    docId,
+    pageIndex,
+    rotation,
+    annotations,
+    selected: false,
+  };
 }
 
 async function readBack(bytes: Uint8Array) {
