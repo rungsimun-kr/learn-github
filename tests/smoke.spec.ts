@@ -70,7 +70,8 @@ test('deletes, rotates and downloads the edited document', async ({ page }) => {
   await expect(page.locator('.page-card')).toHaveCount(3);
 
   await page.getByRole('button', { name: 'Rotate page 1 right' }).click();
-  await expect(page.locator('.page-card .thumb img').first()).toHaveCSS(
+  // The whole frame turns, not just the bitmap, so annotations turn with it.
+  await expect(page.locator('.page-card .thumb-frame').first()).toHaveCSS(
     'transform',
     'matrix(0, 1, -1, 0, 0, 0)',
   );

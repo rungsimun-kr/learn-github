@@ -1,5 +1,7 @@
-import { PDFDocument, degrees } from 'pdf-lib';
+import { PDFDocument, degrees, type PDFFont } from 'pdf-lib';
 import type { LoadedDoc, PageItem } from '../types';
+import { drawAnnotation, needsFont } from './drawAnnotations';
+import { embedTextFont } from './font';
 
 /**
  * The slice of a loaded document that writing needs. Narrower than `LoadedDoc`
@@ -44,6 +46,13 @@ export async function buildPdf(
     copied.set(docId, await out.copyPages(source.libDoc, indices));
   }
 
+  // Text annotations need a Unicode font; fetch and embed it once, and only
+  // when the document actually contains some.
+  let font: PDFFont | null = null;
+  if (pages.some((page) => needsFont(page.annotations))) {
+    font = await embedTextFont(out);
+  }
+
   const cursors = new Map<string, number>();
   for (const item of pages) {
     const cursor = cursors.get(item.docId) ?? 0;
@@ -54,6 +63,21 @@ export async function buildPdf(
       // The editor's rotation is a delta; stack it on whatever the page carried.
       page.setRotation(degrees(normaliseAngle(page.getRotation().angle + item.rotation)));
     }
+
+    if (item.annotations.length > 0) {
+      // Annotations are stored against the unrotated page, which is exactly
+      // what getSize reports, and were placed at the rotation now in effect.
+      const size = page.getSize();
+      const geometry = {
+        width: size.width,
+        height: size.height,
+        rotation: normaliseAngle(page.getRotation().angle),
+      };
+      for (const annotation of item.annotations) {
+        drawAnnotation(page, annotation, geometry, font);
+      }
+    }
+
     out.addPage(page);
   }
 

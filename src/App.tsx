@@ -4,6 +4,13 @@ import ExportImagesDialog, { type ImageExportSettings } from './components/Expor
 import PageGrid from './components/PageGrid';
 import SplitDialog from './components/SplitDialog';
 import Toolbar from './components/Toolbar';
+import PageEditor from './components/PageEditor';
+import {
+  DEFAULT_STYLE,
+  type Annotation,
+  type AnnotationStyle,
+  type Tool,
+} from './lib/annotations';
 import { loadPdfFile, pagesForDoc, PdfLoadError } from './lib/docs';
 import { stripExtension, triggerDownload } from './lib/download';
 import { exportImages, exportRanges, exportSinglePdf } from './lib/export';
@@ -35,6 +42,12 @@ export default function App() {
   const [dialog, setDialog] = useState<'split' | 'images' | null>(null);
   const [fileDragDepth, setFileDragDepth] = useState(0);
 
+  // Which page the annotation editor is open on, and the drawing settings it
+  // remembers between visits.
+  const [editingPageId, setEditingPageId] = useState<string | null>(null);
+  const [tool, setTool] = useState<Tool>('rect');
+  const [style, setStyle] = useState<AnnotationStyle>(DEFAULT_STYLE);
+
   // Mirrors of state for callbacks that must not close over a stale render.
   const pagesRef = useRef(pages);
   pagesRef.current = pages;
@@ -56,6 +69,11 @@ export default function App() {
     });
     return last >= 0 ? last + 1 : pages.length;
   }, [pages]);
+
+  const editingPage = editingPageId
+    ? (pages.find((page) => page.id === editingPageId) ?? null)
+    : null;
+  const editingDoc = editingPage ? docs.get(editingPage.docId) : undefined;
 
   /** Name new downloads after the first file the pages came from. */
   const baseName = useMemo(() => {
@@ -227,6 +245,25 @@ export default function App() {
     [commit],
   );
 
+  const setAnnotations = useCallback(
+    (pageId: string, annotations: Annotation[]) => {
+      commit(
+        pagesRef.current.map((page) => (page.id === pageId ? { ...page, annotations } : page)),
+      );
+    },
+    [commit],
+  );
+
+  /** Step the editor to the neighbouring page without closing it. */
+  const navigateEditor = useCallback((delta: -1 | 1) => {
+    setEditingPageId((current) => {
+      const pages = pagesRef.current;
+      const index = pages.findIndex((page) => page.id === current);
+      const next = pages[index + delta];
+      return next ? next.id : current;
+    });
+  }, []);
+
   const undo = useCallback(() => {
     if (past.length === 0) return;
     setFuture((forward) => [pagesRef.current, ...forward]);
@@ -248,6 +285,7 @@ export default function App() {
     setPast([]);
     setFuture([]);
     setError(null);
+    setEditingPageId(null);
     anchorRef.current = null;
   }, []);
 
@@ -319,7 +357,8 @@ export default function App() {
   // Keyboard shortcuts, ignored while typing in a field or a dialog.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (dialog) return;
+      // The page editor runs its own shortcuts while it is open.
+      if (dialog || editingPageId) return;
       const target = event.target as HTMLElement | null;
       if (target?.closest('input, textarea, select, dialog')) return;
 
@@ -343,7 +382,7 @@ export default function App() {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [dialog, undo, redo, selectAll, selectNone, deleteSelected]);
+  }, [dialog, editingPageId, undo, redo, selectAll, selectNone, deleteSelected]);
 
   const onDragEnter = (event: DragEvent<HTMLDivElement>) => {
     if (!event.dataTransfer.types.includes('Files')) return;
@@ -402,6 +441,10 @@ export default function App() {
         busy={busy !== null}
         onAdd={() => openFilePicker(false)}
         onInsert={() => openFilePicker(true)}
+        onAnnotate={() => {
+          const target = pages.find((page) => page.selected) ?? pages[0];
+          if (target) setEditingPageId(target.id);
+        }}
         onRotate={rotateSelected}
         onDelete={deleteSelected}
         onSelectAll={selectAll}
@@ -435,6 +478,7 @@ export default function App() {
             onRotate={rotateOne}
             onDelete={deleteOne}
             onNudge={nudge}
+            onOpen={setEditingPageId}
             onReorder={reorder}
           />
         )}
@@ -452,6 +496,23 @@ export default function App() {
       </footer>
 
       {fileDragDepth > 0 ? <div className="drop-overlay">Drop PDFs to add them</div> : null}
+
+      {editingPage && editingDoc ? (
+        <PageEditor
+          key={editingPage.id}
+          page={editingPage}
+          doc={editingDoc}
+          position={pages.indexOf(editingPage) + 1}
+          total={pages.length}
+          tool={tool}
+          style={style}
+          onTool={setTool}
+          onStyle={(patch) => setStyle((current) => ({ ...current, ...patch }))}
+          onChange={(annotations) => setAnnotations(editingPage.id, annotations)}
+          onNavigate={navigateEditor}
+          onClose={() => setEditingPageId(null)}
+        />
+      ) : null}
 
       {dialog === 'split' ? (
         <SplitDialog
