@@ -20,7 +20,10 @@ export default function Modal({ title, onClose, children, footer }: ModalProps) 
     <dialog ref={ref} className="modal" onCancel={onClose} onClose={onClose}>
       <header className="modal-header">
         <h2>{title}</h2>
-        <button type="button" className="icon-button" onClick={onClose} aria-label="Close">
+        {/* "Close dialog", not "Close": a footer button may also say Close, and
+            two controls with the same accessible name is a trap for anyone
+            navigating by name. */}
+        <button type="button" className="icon-button" onClick={onClose} aria-label="Close dialog">
           ✕
         </button>
       </header>

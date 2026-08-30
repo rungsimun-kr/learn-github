@@ -11,7 +11,10 @@ import {
   type AnnotationStyle,
   type Tool,
 } from './lib/annotations';
+import OcrDialog, { type OcrSettings } from './components/OcrDialog';
 import { loadPdfFile, pagesForDoc, PdfLoadError } from './lib/docs';
+import { extractText, type ExtractProgress, type PageText } from './lib/ocr';
+import { buildMarkdown, textDownload } from './lib/textExport';
 import { stripExtension, triggerDownload } from './lib/download';
 import { exportImages, exportRanges, exportSinglePdf } from './lib/export';
 import type { PageRange } from './lib/ranges';
@@ -39,7 +42,15 @@ export default function App() {
   const [future, setFuture] = useState<PageItem[][]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [dialog, setDialog] = useState<'split' | 'images' | null>(null);
+  const [dialog, setDialog] = useState<'split' | 'images' | 'ocr' | null>(null);
+
+  // Text extraction is long-running, so it gets its own progress state and an
+  // abort handle rather than riding on the generic `busy` string.
+  const [ocrProgress, setOcrProgress] = useState<ExtractProgress | null>(null);
+  const [ocrSample, setOcrSample] = useState<{ pages: PageText[]; secondsPerPage: number } | null>(
+    null,
+  );
+  const ocrAbortRef = useRef<AbortController | null>(null);
   const [fileDragDepth, setFileDragDepth] = useState(0);
 
   // Which page the annotation editor is open on, and the drawing settings it
@@ -335,6 +346,70 @@ export default function App() {
     [baseName, runExport],
   );
 
+  /** Pages a text run should cover, honouring the dialog's scope choice. */
+  const ocrScope = useCallback((selectionOnly: boolean) => {
+    const current = pagesRef.current;
+    return selectionOnly ? current.filter((page) => page.selected) : current;
+  }, []);
+
+  /** Read a few pages so the settings and the speed can be judged in a minute. */
+  const sampleOcr = useCallback(
+    (settings: OcrSettings) => {
+      const target = ocrScope(settings.selectionOnly).slice(0, 3);
+      if (target.length === 0) return;
+
+      setOcrSample(null);
+      const started = performance.now();
+      void extractText(target, docsRef.current, {
+        language: settings.language,
+        scale: settings.scale,
+        reOcrTextPages: settings.reOcrTextPages,
+      })
+        .then((pages) => {
+          setOcrSample({
+            pages,
+            secondsPerPage: (performance.now() - started) / 1000 / Math.max(1, pages.length),
+          });
+        })
+        .catch((failure: unknown) => setError(messageOf(failure)));
+    },
+    [ocrScope],
+  );
+
+  const startOcr = useCallback(
+    (settings: OcrSettings) => {
+      const target = ocrScope(settings.selectionOnly);
+      if (target.length === 0) return;
+
+      const controller = new AbortController();
+      ocrAbortRef.current = controller;
+      setError(null);
+      setOcrProgress({ done: 0, total: target.length, needingOcr: 0, phase: 'scanning' });
+
+      void extractText(target, docsRef.current, {
+        language: settings.language,
+        scale: settings.scale,
+        reOcrTextPages: settings.reOcrTextPages,
+        signal: controller.signal,
+        onProgress: setOcrProgress,
+      })
+        .then((results) => {
+          if (results.length === 0) return;
+          const download = textDownload(baseName, buildMarkdown(baseName, results));
+          triggerDownload(download.blob, download.filename);
+          setDialog(null);
+        })
+        .catch((failure: unknown) => setError(messageOf(failure)))
+        .finally(() => {
+          ocrAbortRef.current = null;
+          setOcrProgress(null);
+        });
+    },
+    [baseName, ocrScope],
+  );
+
+  const cancelOcr = useCallback(() => ocrAbortRef.current?.abort(), []);
+
   const confirmImages = useCallback(
     (settings: ImageExportSettings) => {
       setDialog(null);
@@ -454,6 +529,7 @@ export default function App() {
         onDownload={downloadPdf}
         onSplit={() => setDialog('split')}
         onExportImages={() => setDialog('images')}
+        onExtractText={() => setDialog('ocr')}
         onClear={clearAll}
       />
 
@@ -520,6 +596,23 @@ export default function App() {
           busy={busy !== null}
           onClose={() => setDialog(null)}
           onConfirm={confirmSplit}
+        />
+      ) : null}
+
+      {dialog === 'ocr' ? (
+        <OcrDialog
+          totalPages={pages.length}
+          selectedPages={selectedCount}
+          running={ocrProgress !== null}
+          progress={ocrProgress}
+          sample={ocrSample}
+          onClose={() => {
+            setDialog(null);
+            setOcrSample(null);
+          }}
+          onSample={sampleOcr}
+          onStart={startOcr}
+          onCancel={cancelOcr}
         />
       ) : null}
 
