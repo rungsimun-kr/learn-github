@@ -17,6 +17,7 @@ interface ToolbarProps {
   onDownload: () => void;
   onSplit: () => void;
   onExportImages: () => void;
+  onExtractText: () => void;
   onClear: () => void;
 }
 
@@ -40,6 +41,7 @@ export default function Toolbar(props: ToolbarProps) {
     onDownload,
     onSplit,
     onExportImages,
+    onExtractText,
     onClear,
   } = props;
 
@@ -137,6 +139,9 @@ export default function Toolbar(props: ToolbarProps) {
       </div>
 
       <div className="toolbar-group toolbar-end">
+        <button type="button" className="button" onClick={onExtractText} disabled={busy || empty}>
+          Extract text…
+        </button>
         <button type="button" className="button" onClick={onExportImages} disabled={busy || empty}>
           Export images…
         </button>

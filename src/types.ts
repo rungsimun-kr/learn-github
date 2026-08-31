@@ -2,16 +2,16 @@ import type { PDFDocument } from 'pdf-lib';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import type { Annotation } from './lib/annotations';
 
-/** A PDF file the user has loaded, kept open by both PDF libraries. */
+/**
+ * A PDF file the user has loaded, kept open by both PDF libraries.
+ *
+ * Deliberately no copy of the raw bytes: each library parses its own and a
+ * third copy would just sit there. On a 300 MB scanned book that copy is 300 MB
+ * of nothing.
+ */
 export interface LoadedDoc {
   id: string;
   name: string;
-  /**
-   * Pristine copy of the file. Never hand this array straight to pdf.js or
-   * pdf-lib — pdf.js transfers the underlying buffer to its worker and detaches
-   * it, which would corrupt every other reader. Always pass `bytes.slice()`.
-   */
-  bytes: Uint8Array;
   /** pdf-lib document, used as a source when writing new PDFs. */
   libDoc: PDFDocument;
   /** pdf.js document, used for rendering thumbnails and images. */

@@ -15,6 +15,7 @@ document never leaves the machine it is on.
 - **Rearrange** — drag pages around, or move them with the ◀ ▶ buttons.
 - **Rotate and delete** — one page at a time or across a whole selection.
 - **Draw on a page** — click any page to open it full size and mark it up (see below).
+- **Extract the text** — including OCR for scanned books, in Thai and English (see below).
 - **Export as images** — PNG or JPEG at up to 288 dpi, one image or a `.zip` of them.
 - **Undo/redo** — every edit is reversible (`Ctrl`/`Cmd` + `Z`).
 
@@ -41,6 +42,40 @@ arrow keys step between pages.
 Marks are **flattened into the page** on export: they become part of the page's content and render
 identically in every reader, but they cannot be clicked or removed again afterwards. Until you
 export, they stay editable and are covered by undo like any other change.
+
+## Reading a scanned book
+
+**Extract text** turns a document into one Markdown file. It works in two passes, and the first one
+matters most:
+
+1. **Pages that already contain text are read directly.** Most PDFs that look like books are digital,
+   not scanned. A 500-page digital book extracts in about **5 seconds** and never starts the OCR
+   engine at all.
+2. **Only what is left goes through OCR** — Tesseract, in a pool of web workers, one page at a time.
+
+Measured on a 150-page scanned fixture (44 MB, so roughly 150 MB at 500 pages) in this project's
+test browser:
+
+| | |
+| --- | --- |
+| Scanned pages | **0.93 s/page** → a 500-page book in **about 8 minutes** |
+| Digital pages | ~0.01 s/page → 500 pages in **under 5 seconds** |
+| Memory during the run | flat at 56–65 MB across 150 pages |
+| Thai recognition confidence | 95% on a clean scan |
+
+Your book will differ — denser type, noise and skew all cost time and accuracy — so the dialog has a
+**Try 3 pages** button that measures *your* document and projects the real figure before you commit
+to the full run. **Stop and keep what is done** ends a run early and still gives you every page read
+so far.
+
+Notes worth knowing:
+
+- The tab has to stay open; the work happens in it.
+- Thai OCR on an old or low-contrast scan makes mistakes. Expect to proofread. The output marks which
+  pages were recognised rather than read exactly, and reports the engine's own confidence.
+- If a PDF has a text layer that is itself bad OCR, tick **Re-read pages that already have text**.
+- The engine and its language data are served from this app (~15 MB in `public/tesseract/`), not a
+  CDN, so nothing about a document implies a third-party request while you read it.
 
 ## Running it
 
@@ -97,7 +132,17 @@ when a page is extracted twice, and fall under undo without any history code of 
 | `src/lib/export.ts` | Turns the working document into downloads |
 | `src/lib/geometry.ts` | View↔PDF coordinate transforms |
 | `src/lib/drawAnnotations.ts` | Flattens marks into a page |
+| `src/lib/textLayer.ts` | Reads text a PDF already has, and decides if OCR is needed |
+| `src/lib/ocr.ts` | The two-pass extraction run: worker pool, progress, cancellation |
 | `src/components/` | The UI |
+
+### Two things keep a 500-page book usable
+
+- **Thumbnails render only near the viewport** (`Thumbnail.tsx`, via `IntersectionObserver`).
+  Rendering every card on load meant 500 queued jobs and an unusable grid; now 30 render and the
+  first appears in half a second.
+- **`LoadedDoc` keeps no copy of the raw bytes.** Each PDF library parses its own; a third copy was
+  being retained and never read, which on a 150 MB scan is 150 MB of nothing.
 
 ### Annotation coordinates
 

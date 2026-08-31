@@ -56,7 +56,6 @@ export async function loadPdfFile(file: File): Promise<LoadedDoc> {
   return {
     id: uid('doc'),
     name: file.name,
-    bytes,
     libDoc,
     jsDoc,
     pageCount: libDoc.getPageCount(),
