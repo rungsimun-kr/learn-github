@@ -12,7 +12,7 @@ import {
   type Tool,
 } from './lib/annotations';
 import OcrDialog, { type OcrSettings } from './components/OcrDialog';
-import { loadPdfFile, pagesForDoc, PdfLoadError } from './lib/docs';
+import { loadFile, pagesForDoc, PdfLoadError } from './lib/docs';
 import { extractText, type ExtractProgress, type PageText } from './lib/ocr';
 import { buildMarkdown, textDownload } from './lib/textExport';
 import { stripExtension, triggerDownload } from './lib/download';
@@ -114,7 +114,7 @@ export default function App() {
       const failures: string[] = [];
       for (const file of pdfs) {
         try {
-          loaded.push(await loadPdfFile(file));
+          loaded.push(await loadFile(file));
         } catch (failure) {
           failures.push(messageOf(failure));
         }
@@ -493,15 +493,15 @@ export default function App() {
       <header className="app-header">
         <h1>PDF Editor</h1>
         <p>
-          Merge, split, reorder, rotate and export PDF pages — entirely in your browser, with no
-          uploads.
+          Merge, split, reorder, rotate and export PDF pages — and drop in images to add them as
+          pages. Entirely in your browser, with no uploads.
         </p>
       </header>
 
       <input
         ref={fileInputRef}
         type="file"
-        accept="application/pdf,.pdf"
+        accept="application/pdf,.pdf,image/*"
         multiple
         hidden
         onChange={(event) => handleFileInput(event.target.files)}

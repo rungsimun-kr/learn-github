@@ -52,14 +52,14 @@ export default function Toolbar(props: ToolbarProps) {
     <div className="toolbar" role="toolbar" aria-label="Editing tools">
       <div className="toolbar-group">
         <button type="button" className="button primary" onClick={onAdd} disabled={busy}>
-          Add PDFs
+          Add files
         </button>
         <button
           type="button"
           className="button"
           onClick={onInsert}
           disabled={busy || empty}
-          title={`Insert the pages of another PDF at position ${insertPosition}`}
+          title={`Insert another file's pages at position ${insertPosition}`}
         >
           Insert at {insertPosition}
         </button>

@@ -78,7 +78,7 @@ async function openDialog(page: Page, path: string): Promise<void> {
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Drop PDFs here' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Drop PDFs or images here' })).toBeVisible();
 });
 
 test('a digital PDF is read directly, without starting the OCR engine', async ({ page }) => {

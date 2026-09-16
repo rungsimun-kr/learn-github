@@ -39,7 +39,7 @@ async function readDownload(download: Download): Promise<Uint8Array> {
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Drop PDFs here' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Drop PDFs or images here' })).toBeVisible();
 });
 
 test('renders thumbnails for a loaded PDF', async ({ page }) => {
@@ -183,12 +183,12 @@ test('exports a selected page as a PNG', async ({ page }) => {
   expect(Array.from(bytes.subarray(0, 4))).toEqual([0x89, 0x50, 0x4e, 0x47]);
 });
 
-test('rejects a file that is not a PDF', async ({ page }) => {
+test('rejects a file that is neither a PDF nor an image', async ({ page }) => {
   const dir = await mkdtemp(join(tmpdir(), 'pdf-editor-'));
   const path = join(dir, 'notes.pdf');
   await writeFile(path, 'this is not a pdf');
 
   await addFile(page, path);
-  await expect(page.getByRole('alert')).toContainText('is not a PDF file');
+  await expect(page.getByRole('alert')).toContainText('is not a PDF or a supported image');
   await expect(page.locator('.page-card')).toHaveCount(0);
 });
