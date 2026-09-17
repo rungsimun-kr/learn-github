@@ -114,7 +114,7 @@ async function exportAndReopen(page: Page): Promise<Uint8Array> {
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Drop PDFs here' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Drop PDFs or images here' })).toBeVisible();
 });
 
 test('a highlight is baked into the exported PDF where it was drawn', async ({ page }) => {

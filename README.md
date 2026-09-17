@@ -9,7 +9,8 @@ document never leaves the machine it is on.
 ## What it does
 
 - **Merge** — add several PDFs and their pages join one continuous list.
-- **Insert** — drop another PDF's pages in at a chosen position, not just at the end.
+- **Add images** — drop in a JPEG, PNG, WebP, GIF, BMP or AVIF and it becomes a page (see below).
+- **Insert** — drop another file's pages in at a chosen position, not just at the end.
 - **Split and extract** — by page ranges (`1-5, 8, 10-12`), in fixed-size chunks, or one file per
   page. A single range downloads as a PDF; several come back as a `.zip`.
 - **Rearrange** — drag pages around, or move them with the ◀ ▶ buttons.
@@ -42,6 +43,26 @@ arrow keys step between pages.
 Marks are **flattened into the page** on export: they become part of the page's content and render
 identically in every reader, but they cannot be clicked or removed again afterwards. Until you
 export, they stay editable and are covered by undo like any other change.
+
+## Images as pages
+
+Drop in a JPEG, PNG, WebP, GIF, BMP or AVIF and it arrives as a page. It is then a page like any
+other — it can be reordered, rotated, annotated, split out, exported as an image, or run through OCR,
+because by the time anything else sees it, it really is a PDF page.
+
+**The page is exactly the image**: same proportions, no borders, nothing cropped. For the physical
+size the image's own declared resolution is used — JPEG's JFIF density or PNG's `pHYs` chunk — so a
+300 dpi A4 scan imports as an actual A4 page. Images that declare nothing are treated as 96 dpi, the
+size a screenshot appears on screen. Very large pictures are scaled down so no page exceeds A2, which
+never changes the proportions.
+
+JPEGs and PNGs are embedded byte for byte, so nothing is re-encoded and the PDF stays close to the
+original file size. Two cases go through the browser's decoder instead: formats pdf-lib cannot embed,
+and **JPEGs whose EXIF asks for a rotation** — pdf-lib ignores EXIF, so a photo taken in portrait on
+a phone would otherwise land on its side.
+
+**HEIC is not supported.** It is what an iPhone produces by default, but no Chrome or Firefox can
+decode it; the app says so and asks you to export as JPEG first rather than failing vaguely.
 
 ## Reading a scanned book
 
@@ -123,6 +144,9 @@ structure viewed from a different angle. `src/lib/build.ts` turns any such list 
 Annotations living *on the item* is what makes them follow a page when it is reordered, get copied
 when a page is extracted twice, and fall under undo without any history code of their own.
 
+The same reasoning is why importing an image is a small change rather than a large one: `loadFile`
+converts it to a one-page PDF at the door, so nothing downstream ever learns that images exist.
+
 | Path | Role |
 | --- | --- |
 | `src/lib/docs.ts` | Opens a file into both PDF libraries |
@@ -132,6 +156,7 @@ when a page is extracted twice, and fall under undo without any history code of 
 | `src/lib/export.ts` | Turns the working document into downloads |
 | `src/lib/geometry.ts` | View↔PDF coordinate transforms |
 | `src/lib/drawAnnotations.ts` | Flattens marks into a page |
+| `src/lib/images.ts` | Turns an image into a one-page PDF at import time |
 | `src/lib/textLayer.ts` | Reads text a PDF already has, and decides if OCR is needed |
 | `src/lib/ocr.ts` | The two-pass extraction run: worker pool, progress, cancellation |
 | `src/components/` | The UI |
