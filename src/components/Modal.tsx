@@ -5,10 +5,12 @@ interface ModalProps {
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  /** 'wide' for a dialog that needs more than the usual single-column form. */
+  width?: 'normal' | 'wide';
 }
 
 /** Dialog shell built on <dialog> so focus trapping and Esc come for free. */
-export default function Modal({ title, onClose, children, footer }: ModalProps) {
+export default function Modal({ title, onClose, children, footer, width = 'normal' }: ModalProps) {
   const ref = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -17,7 +19,12 @@ export default function Modal({ title, onClose, children, footer }: ModalProps) 
   }, []);
 
   return (
-    <dialog ref={ref} className="modal" onCancel={onClose} onClose={onClose}>
+    <dialog
+      ref={ref}
+      className={`modal${width === 'wide' ? ' modal-wide' : ''}`}
+      onCancel={onClose}
+      onClose={onClose}
+    >
       <header className="modal-header">
         <h2>{title}</h2>
         {/* "Close dialog", not "Close": a footer button may also say Close, and

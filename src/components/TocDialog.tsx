@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import Modal from './Modal';
+import TocPreview from './TocPreview';
 import { layoutToc, seedFromFiles, type TocEntry, type TocSettings } from '../lib/toc';
 import { uid } from '../lib/uid';
 import type { LoadedDoc, PageItem } from '../types';
@@ -46,6 +47,7 @@ export default function TocDialog({ pages, docs, toc, onChange, onClose }: TocDi
     <Modal
       title="Contents"
       onClose={onClose}
+      width="wide"
       footer={
         <>
           <button
@@ -63,6 +65,8 @@ export default function TocDialog({ pages, docs, toc, onChange, onClose }: TocDi
         </>
       }
     >
+      <div className="toc-dialog-body">
+      <div className="toc-dialog-form">
       <label className="inline-field">
         <span>Heading</span>
         <input
@@ -171,6 +175,19 @@ export default function TocDialog({ pages, docs, toc, onChange, onClose }: TocDi
           ? ` ${preview.dropped} entr${preview.dropped === 1 ? 'y points' : 'ies point'} at a page that is no longer here and will be left out.`
           : null}
       </p>
+      </div>
+
+      <div className="toc-dialog-preview">
+        <p className="hint">Preview</p>
+        {toc.addPage ? (
+          <TocPreview layout={preview} heading={toc.heading} />
+        ) : (
+          <p className="summary">
+            No contents page will be added — only the bookmarks, if that box above is checked.
+          </p>
+        )}
+      </div>
+      </div>
     </Modal>
   );
 }

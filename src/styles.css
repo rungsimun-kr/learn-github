@@ -743,8 +743,68 @@ code {
   border-color: var(--danger);
 }
 
+/* The title prints bold, so it reads bold here too — a small preview of its
+   own, right in the list. */
+.toc-entry .text-input:first-child {
+  font-weight: 600;
+}
+
 .toc-actions {
   display: flex;
   gap: 8px;
   margin-bottom: 14px;
+}
+
+.modal-wide {
+  width: min(760px, calc(100vw - 32px));
+}
+
+.toc-dialog-body {
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  gap: 24px;
+  align-items: start;
+}
+
+.toc-dialog-form {
+  min-width: 0;
+}
+
+.toc-dialog-preview {
+  position: sticky;
+  top: 0;
+}
+
+.toc-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.toc-preview-page {
+  border: 1px solid var(--border);
+  background: #fff;
+  box-shadow: var(--shadow);
+  line-height: 0;
+}
+
+.toc-preview-pager {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+@media (width <= 720px) {
+  .modal-wide {
+    width: min(520px, calc(100vw - 32px));
+  }
+
+  .toc-dialog-body {
+    grid-template-columns: 1fr;
+  }
+
+  .toc-dialog-preview {
+    position: static;
+  }
 }

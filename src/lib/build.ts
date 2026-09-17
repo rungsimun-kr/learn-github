@@ -1,7 +1,7 @@
 import { PDFDocument, degrees, type PDFFont, type PDFPage } from 'pdf-lib';
 import type { LoadedDoc, PageItem } from '../types';
 import { drawAnnotation, needsFont } from './drawAnnotations';
-import { embedTextFont } from './font';
+import { embedBoldTextFont, embedTextFont } from './font';
 import { drawTocPages, layoutToc, writeOutline, type TocSettings } from './toc';
 
 /**
@@ -35,6 +35,7 @@ export async function buildPdf(
   docs: ReadonlyMap<string, PdfSource>,
   toc?: TocSettings,
   loadFont: FontLoader = embedTextFont,
+  loadBoldFont: FontLoader = embedBoldTextFont,
 ): Promise<Uint8Array> {
   if (pages.length === 0) {
     throw new Error('There are no pages to write.');
@@ -93,7 +94,7 @@ export async function buildPdf(
     added.push(page);
   }
 
-  await applyToc(out, pages, added, toc, font, loadFont);
+  await applyToc(out, pages, added, toc, font, loadFont, loadBoldFont);
 
   return out.save();
 }
@@ -111,6 +112,7 @@ async function applyToc(
   toc: TocSettings | undefined,
   existingFont: PDFFont | null,
   loadFont: FontLoader,
+  loadBoldFont: FontLoader,
 ): Promise<void> {
   if (!toc || toc.entries.length === 0) return;
   if (!toc.addPage && !toc.addBookmarks) return;
@@ -118,16 +120,18 @@ async function applyToc(
   const first = added[0];
   if (!first) return;
 
-  // Titles are very likely to be Thai, so always the Unicode font.
-  const font = existingFont ?? (await loadFont(out));
-
   const layout = layoutToc(toc.entries, items, {
     width: first.getWidth(),
     height: first.getHeight(),
   });
 
   if (toc.addPage) {
-    drawTocPages(out, layout, toc.heading, font, added);
+    // Titles are very likely to be Thai, so always the Unicode fonts. Both
+    // weights are needed together — the heading and titles are bold, the
+    // numbers and dot leaders regular.
+    const regular = existingFont ?? (await loadFont(out));
+    const bold = await loadBoldFont(out);
+    drawTocPages(out, layout, toc.heading, { regular, bold }, added);
   }
 
   if (toc.addBookmarks) {

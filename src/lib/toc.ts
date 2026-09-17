@@ -120,7 +120,9 @@ export function layoutToc(
   const headingSize = options.headingSize ?? 22;
   const margin = options.margin ?? 64;
 
-  const rowHeight = fontSize * 2;
+  // A little more than double gives the list room to breathe, which is most
+  // of what makes a page read as typeset rather than printed in a hurry.
+  const rowHeight = fontSize * 2.3;
   const headingY = size.height - margin - headingSize;
   // The heading only takes room on the first page; give every page the same
   // usable band so a row never lands under the heading.
@@ -201,6 +203,19 @@ function topOfPage(doc: PDFDocument, page: PDFPage): PDFArray {
   return dest;
 }
 
+/**
+ * How many dots fill the gap between a title and its page number.
+ *
+ * Pulled out on its own so the live preview and the printed page compute the
+ * same leader instead of two independent approximations that quietly drift
+ * apart from each other.
+ */
+export function computeDotLeader(gapStart: number, gapEnd: number, dotWidth: number): string {
+  if (gapEnd <= gapStart || dotWidth <= 0) return '';
+  const count = Math.floor((gapEnd - gapStart) / dotWidth);
+  return count > 0 ? '.'.repeat(count) : '';
+}
+
 /** Attach a clickable region to a page. */
 function addLink(
   doc: PDFDocument,
@@ -227,73 +242,96 @@ function addLink(
   page.node.set(PDFName.of('Annots'), annots);
 }
 
+/** The two weights a contents page draws with. */
+export interface TocFonts {
+  regular: PDFFont;
+  bold: PDFFont;
+}
+
 /**
  * Draw the contents pages and insert them at the front.
  *
  * Called once the content pages exist, because only then are there refs to
- * link to.
+ * link to. The heading and every title are set in the bold weight — that
+ * contrast against the regular page numbers is what makes a title read as a
+ * heading rather than another line in a list — and the heading is centred
+ * over a thin rule, the two touches that make the page read as typeset
+ * rather than a plain list.
  */
 export function drawTocPages(
   doc: PDFDocument,
   layout: TocLayout,
   heading: string,
-  font: PDFFont,
+  fonts: TocFonts,
   targets: readonly PDFPage[],
 ): void {
-  const measure = (text: string, size = layout.fontSize) => font.widthOfTextAtSize(text, size);
+  const measure = (text: string, size = layout.fontSize) =>
+    fonts.regular.widthOfTextAtSize(text, size);
+  const measureBold = (text: string, size = layout.fontSize) =>
+    fonts.bold.widthOfTextAtSize(text, size);
+  const left = layout.margin;
   const right = layout.width - layout.margin;
   const dotWidth = measure('.');
+  const ink = rgb(0.1, 0.1, 0.1);
 
   layout.pages.forEach((rows, index) => {
     // Insert in order, so the first contents page ends up first.
     const page = doc.insertPage(index, [layout.width, layout.height]);
-    page.setFont(font);
+    page.setFont(fonts.regular);
 
     if (index === 0 && heading.trim() !== '') {
+      const headingWidth = measureBold(heading, layout.headingSize);
+      const headingX = left + Math.max(0, (right - left - headingWidth) / 2);
       page.drawText(heading, {
-        x: layout.margin,
+        x: headingX,
         y: layout.headingY,
         size: layout.headingSize,
-        font,
-        color: rgb(0.1, 0.1, 0.1),
+        font: fonts.bold,
+        color: ink,
+      });
+
+      const ruleY = layout.headingY - layout.headingSize * 0.4;
+      page.drawLine({
+        start: { x: left, y: ruleY },
+        end: { x: right, y: ruleY },
+        thickness: 1,
+        color: rgb(0.75, 0.75, 0.75),
       });
     }
 
     for (const row of rows) {
       const number = String(row.pageNumber);
       const numberWidth = measure(number);
-      const titleSpace = right - layout.margin - numberWidth - dotWidth * 4;
-      const title = fitTitle(row.entry.title, titleSpace, (text) => measure(text));
-      const titleWidth = measure(title);
+      // Titles are bold, so they measure against the bold font, not the one
+      // the numbers and dots use.
+      const titleSpace = right - left - numberWidth - dotWidth * 4;
+      const title = fitTitle(row.entry.title, titleSpace, (text) => measureBold(text));
+      const titleWidth = measureBold(title);
 
       page.drawText(title, {
-        x: layout.margin,
+        x: left,
         y: row.y,
         size: layout.fontSize,
-        font,
-        color: rgb(0.1, 0.1, 0.1),
+        font: fonts.bold,
+        color: ink,
       });
       page.drawText(number, {
         x: right - numberWidth,
         y: row.y,
         size: layout.fontSize,
-        font,
-        color: rgb(0.1, 0.1, 0.1),
+        font: fonts.regular,
+        color: ink,
       });
 
-      const gapStart = layout.margin + titleWidth + dotWidth;
-      const gapEnd = right - numberWidth - dotWidth;
-      if (gapEnd > gapStart && dotWidth > 0) {
-        const dots = '.'.repeat(Math.max(0, Math.floor((gapEnd - gapStart) / dotWidth)));
-        if (dots) {
-          page.drawText(dots, {
-            x: gapStart,
-            y: row.y,
-            size: layout.fontSize,
-            font,
-            color: rgb(0.62, 0.62, 0.62),
-          });
-        }
+      const dots = computeDotLeader(left + titleWidth + dotWidth, right - numberWidth - dotWidth, dotWidth);
+      if (dots) {
+        page.drawText(dots, {
+          x: left + titleWidth + dotWidth,
+          y: row.y,
+          size: layout.fontSize,
+          font: fonts.regular,
+          color: rgb(0.62, 0.62, 0.62),
+        });
       }
 
       const target = targets[row.contentIndex];
@@ -302,7 +340,7 @@ export function drawTocPages(
         addLink(
           doc,
           page,
-          [layout.margin, row.y - layout.fontSize * 0.35, right, row.y + layout.fontSize],
+          [left, row.y - layout.fontSize * 0.35, right, row.y + layout.fontSize],
           topOfPage(doc, target),
         );
       }

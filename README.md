@@ -66,6 +66,15 @@ is left out rather than silently linking somewhere wrong.
 A contents page belongs to the whole document, so **Download PDF** adds it — extracting a few pages
 with **Split…** or with a selection does not drag one along.
 
+The dialog shows a **live preview** of the contents page beside the list, redrawn as you type — no
+need to export just to see how it reads. It is drawn with the same layout as the real page but by a
+different engine (the browser's canvas, not pdf-lib), so it will not be pixel-identical, only the same
+shape.
+
+The printed page itself is set in a **formal style**: a centred bold heading over a rule, and every
+title in bold against page numbers in the regular weight — the contrast that makes a title read as a
+heading rather than another line in a list.
+
 ## Images as pages
 
 Drop in a JPEG, PNG, WebP, GIF, BMP or AVIF and it arrives as a page. It is then a page like any
@@ -192,6 +201,7 @@ position would point somewhere wrong the moment anything moved.
 | `src/lib/drawAnnotations.ts` | Flattens marks into a page |
 | `src/lib/images.ts` | Turns an image into a one-page PDF at import time |
 | `src/lib/toc.ts` | Contents: seeding, layout, link annotations, the bookmark tree |
+| `src/components/TocPreview.tsx` | Redraws the contents page live on a canvas as it's edited |
 | `src/lib/textLayer.ts` | Reads text a PDF already has, and decides if OCR is needed |
 | `src/lib/ocr.ts` | The two-pass extraction run: worker pool, progress, cancellation |
 | `src/components/` | The UI |
@@ -230,9 +240,14 @@ Three details are worth knowing before changing anything:
   the polyfill every render fails on anything older.
 
 - **Text needs a real embedded font.** The standard PDF fonts are WinAnsi only and *throw* on Thai,
-  so `src/lib/font.ts` embeds Sarabun (SIL Open Font License, vendored in `src/assets/fonts/`),
-  subsetted to the glyphs used. Both the font and fontkit load on demand, so a session that never
-  types anything never downloads either.
+  so `src/lib/font.ts` embeds Sarabun (SIL Open Font License, vendored in `src/assets/fonts/`) in both
+  regular and bold weights, subsetted to the glyphs used. Each weight loads only the first time
+  something actually needs it — a session that never opens Contents never fetches the bold one.
+- **The contents page's live preview draws on canvas, not through pdf-lib.** Rebuilding a PDF on every
+  keystroke would mean re-running pdf-lib and fontkit constantly; `TocPreview.tsx` instead draws with
+  the Canvas 2D API using the Sarabun webfont already loaded via `@font-face`, sharing `layoutToc`,
+  `fitTitle` and `computeDotLeader` with the real export so the two never quietly drift apart, even
+  though canvas and PDF font metrics are never pixel-identical.
 
 Password-protected PDFs are rejected with a message rather than opened — removing encryption is out
 of scope.

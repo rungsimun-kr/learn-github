@@ -1,5 +1,14 @@
-import { describe, expect, it } from 'vitest';
-import { fitTitle, layoutToc, seedFromFiles, type TocEntry } from './toc';
+import { PDFDocument, PDFName, StandardFonts } from 'pdf-lib';
+import { beforeAll, describe, expect, it } from 'vitest';
+import {
+  computeDotLeader,
+  drawTocPages,
+  fitTitle,
+  layoutToc,
+  seedFromFiles,
+  type TocEntry,
+  type TocFonts,
+} from './toc';
 import type { PageItem } from '../types';
 
 const page = (id: string, docId: string): PageItem => ({
@@ -155,5 +164,143 @@ describe('fitTitle', () => {
 
   it('survives a width too small for anything', () => {
     expect(fitTitle('Anything', 5, measure)).toBe('A…');
+  });
+});
+
+describe('computeDotLeader', () => {
+  it('fills the gap with as many whole dots as fit', () => {
+    expect(computeDotLeader(0, 25, 5)).toBe('.....');
+  });
+
+  it('floors a gap that is not an exact multiple of the dot width', () => {
+    expect(computeDotLeader(0, 24, 5)).toBe('....');
+  });
+
+  it('is empty once the gap is narrower than one dot', () => {
+    expect(computeDotLeader(0, 4, 5)).toBe('');
+  });
+
+  it('is empty when the gap has closed to nothing or gone negative', () => {
+    // A long title can push right up against — or past — the page number.
+    expect(computeDotLeader(100, 100, 5)).toBe('');
+    expect(computeDotLeader(100, 90, 5)).toBe('');
+  });
+
+  it('is empty for a degenerate zero-width dot', () => {
+    expect(computeDotLeader(0, 100, 0)).toBe('');
+  });
+});
+
+describe('drawTocPages', () => {
+  // Real pdf-lib objects throughout: the standard fonts need no network or
+  // fontkit, and only a real PDFPage has the resource dictionary and content
+  // stream this function actually writes to.
+  let regular: TocFonts['regular'];
+  let bold: TocFonts['bold'];
+
+  beforeAll(async () => {
+    const doc = await PDFDocument.create();
+    regular = await doc.embedFont(StandardFonts.Helvetica);
+    bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  });
+
+  const contentPage = (label: string) => ({
+    id: label,
+    docId: 'd',
+    pageIndex: 0,
+    rotation: 0 as const,
+    annotations: [],
+    selected: false,
+  });
+
+  /** How many distinct font objects the page's resources actually resolve to. */
+  async function distinctFontCount(doc: PDFDocument, pageIndex: number): Promise<number> {
+    const bytes = await doc.save();
+    const reloaded = await PDFDocument.load(bytes);
+    const resources = reloaded.getPage(pageIndex).node.get(PDFName.of('Resources'));
+    const fonts = (resources as unknown as { get(name: unknown): unknown }).get(PDFName.of('Font'));
+    // pdf-lib gives every `drawText` call its own resource *name*, even when
+    // reusing the same font object, so the names alias down to the underlying
+    // indirect references — that's the count that actually matters here.
+    const values = (fonts as { values(): Array<{ toString(): string }> }).values();
+    return new Set(values.map((value) => value.toString())).size;
+  }
+
+  it('inserts exactly as many contents pages as the layout asked for', async () => {
+    const doc = await PDFDocument.create();
+    const target = doc.addPage([400, 600]);
+    const pages = [contentPage('p1')];
+    const layout = layoutToc([{ id: 't1', title: 'Alpha', pageId: 'p1' }], pages, {
+      width: 400,
+      height: 600,
+    });
+
+    drawTocPages(doc, layout, 'Contents', { regular, bold }, [target]);
+    expect(doc.getPageCount()).toBe(1 + layout.pageCount);
+  });
+
+  it('uses two distinct fonts, not the same one drawn twice', async () => {
+    const doc = await PDFDocument.create();
+    const target = doc.addPage([400, 600]);
+    const pages = [contentPage('p1')];
+    const layout = layoutToc([{ id: 't1', title: 'Alpha', pageId: 'p1' }], pages, {
+      width: 400,
+      height: 600,
+    });
+
+    drawTocPages(doc, layout, 'Contents', { regular, bold }, [target]);
+    expect(await distinctFontCount(doc, 0)).toBe(2);
+  });
+
+  it('adds one link per row that resolved to a real page', async () => {
+    const doc = await PDFDocument.create();
+    const targets = [doc.addPage([400, 600]), doc.addPage([400, 600])];
+    const pages = [contentPage('p1'), contentPage('p2')];
+    const entries = [
+      { id: 't1', title: 'Alpha', pageId: 'p1' },
+      { id: 't2', title: 'Beta', pageId: 'p2' },
+    ];
+    const layout = layoutToc(entries, pages, { width: 400, height: 600 });
+
+    drawTocPages(doc, layout, 'Contents', { regular, bold }, targets);
+
+    const bytes = await doc.save();
+    const reloaded = await PDFDocument.load(bytes);
+    const annots = reloaded.getPage(0).node.get(PDFName.of('Annots'));
+    // @ts-expect-error -- PDFArray is untyped this deep.
+    expect(annots.size()).toBe(2);
+  });
+
+  it('skips a link for a row whose target page was not supplied', async () => {
+    const doc = await PDFDocument.create();
+    const target = doc.addPage([400, 600]);
+    const pages = [contentPage('p1'), contentPage('p2')];
+    const entries = [
+      { id: 't1', title: 'Alpha', pageId: 'p1' },
+      { id: 't2', title: 'Beta', pageId: 'p2' },
+    ];
+    const layout = layoutToc(entries, pages, { width: 400, height: 600 });
+
+    // Only one real target for two resolved rows — the second has nowhere to
+    // link to and must be skipped rather than throwing or linking nowhere.
+    drawTocPages(doc, layout, 'Contents', { regular, bold }, [target]);
+
+    const bytes = await doc.save();
+    const reloaded = await PDFDocument.load(bytes);
+    const annots = reloaded.getPage(0).node.get(PDFName.of('Annots'));
+    // @ts-expect-error -- PDFArray is untyped this deep.
+    expect(annots.size()).toBe(1);
+  });
+
+  it('does not throw when there is nothing to write a heading for', async () => {
+    const doc = await PDFDocument.create();
+    const target = doc.addPage([400, 600]);
+    const pages = [contentPage('p1')];
+    const layout = layoutToc([{ id: 't1', title: 'Alpha', pageId: 'p1' }], pages, {
+      width: 400,
+      height: 600,
+    });
+
+    expect(() => drawTocPages(doc, layout, '', { regular, bold }, [target])).not.toThrow();
   });
 });

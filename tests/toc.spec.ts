@@ -207,3 +207,48 @@ test('a page selection is exported without a contents page', async ({ page }) =>
   expect(result.pageCount).toBe(2);
   expect(result.bookmarks).toEqual([]);
 });
+
+test('the dialog shows a live preview that updates as entries change', async ({ page }) => {
+  await page.locator('input[type="file"]').setInputFiles(await writeDoc('Alpha', 3));
+  await expect(page.locator('.page-card')).toHaveCount(3);
+
+  await openContents(page);
+  const canvas = page.locator('.toc-preview canvas');
+  await expect(canvas).toBeVisible();
+
+  const before = await canvas.evaluate((el: HTMLCanvasElement) => el.toDataURL());
+  await page.getByLabel('Entry title').first().fill('บทที่หนึ่ง แก้ไขแล้ว');
+  await expect
+    .poll(() => canvas.evaluate((el: HTMLCanvasElement) => el.toDataURL()))
+    .not.toBe(before);
+});
+
+test('the printed heading and titles use a different font from the page numbers', async ({
+  page,
+}) => {
+  await page.locator('input[type="file"]').setInputFiles(await writeDoc('Alpha', 2));
+  await expect(page.locator('.page-card')).toHaveCount(2);
+
+  await openContents(page);
+  await page.getByRole('button', { name: 'Done' }).click();
+
+  const bytes = await download(page);
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const doc = await pdfjs.getDocument({ data: bytes }).promise;
+  const content = await (await doc.getPage(1)).getTextContent();
+
+  const items = content.items as unknown as Array<{ str: string; fontName: string }>;
+  const withText = items.filter((item) => item.str !== '');
+
+  const heading = withText.find((item) => item.str.includes('Contents'));
+  const title = withText.find((item) => item.str.includes('alpha'));
+  const number = withText.find((item) => item.str === '2');
+
+  expect(heading).toBeDefined();
+  expect(title).toBeDefined();
+  expect(number).toBeDefined();
+  // Bold heading/title share one font resource; the regular page number is a
+  // genuinely different one, not the same font drawn twice.
+  expect(heading!.fontName).toBe(title!.fontName);
+  expect(number!.fontName).not.toBe(heading!.fontName);
+});
