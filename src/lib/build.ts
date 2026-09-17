@@ -1,13 +1,21 @@
-import { PDFDocument, degrees, type PDFFont } from 'pdf-lib';
+import { PDFDocument, degrees, type PDFFont, type PDFPage } from 'pdf-lib';
 import type { LoadedDoc, PageItem } from '../types';
 import { drawAnnotation, needsFont } from './drawAnnotations';
 import { embedTextFont } from './font';
+import { drawTocPages, layoutToc, writeOutline, type TocSettings } from './toc';
 
 /**
  * The slice of a loaded document that writing needs. Narrower than `LoadedDoc`
  * so this module can be exercised in Node without pdf.js or a browser.
  */
 export type PdfSource = Pick<LoadedDoc, 'libDoc'>;
+
+/**
+ * How the Unicode font is obtained. The default fetches it over HTTP, which
+ * only works in a browser, so tests hand in one embedded from disk instead —
+ * the same reason `PdfSource` is narrower than `LoadedDoc`.
+ */
+export type FontLoader = (doc: PDFDocument) => Promise<PDFFont>;
 
 function normaliseAngle(angle: number): number {
   return ((Math.round(angle) % 360) + 360) % 360;
@@ -25,6 +33,8 @@ function normaliseAngle(angle: number): number {
 export async function buildPdf(
   pages: readonly PageItem[],
   docs: ReadonlyMap<string, PdfSource>,
+  toc?: TocSettings,
+  loadFont: FontLoader = embedTextFont,
 ): Promise<Uint8Array> {
   if (pages.length === 0) {
     throw new Error('There are no pages to write.');
@@ -50,10 +60,11 @@ export async function buildPdf(
   // when the document actually contains some.
   let font: PDFFont | null = null;
   if (pages.some((page) => needsFont(page.annotations))) {
-    font = await embedTextFont(out);
+    font = await loadFont(out);
   }
 
   const cursors = new Map<string, number>();
+  const added: PDFPage[] = [];
   for (const item of pages) {
     const cursor = cursors.get(item.docId) ?? 0;
     cursors.set(item.docId, cursor + 1);
@@ -79,9 +90,53 @@ export async function buildPdf(
     }
 
     out.addPage(page);
+    added.push(page);
   }
 
+  await applyToc(out, pages, added, toc, font, loadFont);
+
   return out.save();
+}
+
+/**
+ * Add the contents page and the bookmarks, if asked for.
+ *
+ * This runs last on purpose: the destinations are refs to the content pages,
+ * which only exist once those pages have been added.
+ */
+async function applyToc(
+  out: PDFDocument,
+  items: readonly PageItem[],
+  added: readonly PDFPage[],
+  toc: TocSettings | undefined,
+  existingFont: PDFFont | null,
+  loadFont: FontLoader,
+): Promise<void> {
+  if (!toc || toc.entries.length === 0) return;
+  if (!toc.addPage && !toc.addBookmarks) return;
+
+  const first = added[0];
+  if (!first) return;
+
+  // Titles are very likely to be Thai, so always the Unicode font.
+  const font = existingFont ?? (await loadFont(out));
+
+  const layout = layoutToc(toc.entries, items, {
+    width: first.getWidth(),
+    height: first.getHeight(),
+  });
+
+  if (toc.addPage) {
+    drawTocPages(out, layout, toc.heading, font, added);
+  }
+
+  if (toc.addBookmarks) {
+    const rows = layout.pages
+      .flat()
+      .map((row) => ({ title: row.entry.title, page: added[row.contentIndex] }))
+      .filter((row): row is { title: string; page: PDFPage } => row.page !== undefined);
+    writeOutline(out, rows);
+  }
 }
 
 /** Build a PDF containing only the pages at the given positions in `pages`. */

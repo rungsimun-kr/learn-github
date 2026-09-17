@@ -11,6 +11,7 @@ document never leaves the machine it is on.
 - **Merge** — add several PDFs and their pages join one continuous list.
 - **Add images** — drop in a JPEG, PNG, WebP, GIF, BMP or AVIF and it becomes a page (see below).
 - **Insert** — drop another file's pages in at a chosen position, not just at the end.
+- **Contents** — a table of contents page whose lines jump to the page, plus sidebar bookmarks (see below).
 - **Split and extract** — by page ranges (`1-5, 8, 10-12`), in fixed-size chunks, or one file per
   page. A single range downloads as a PDF; several come back as a `.zip`.
 - **Rearrange** — drag pages around, or move them with the ◀ ▶ buttons.
@@ -43,6 +44,27 @@ arrow keys step between pages.
 Marks are **flattened into the page** on export: they become part of the page's content and render
 identically in every reader, but they cannot be clicked or removed again afterwards. Until you
 export, they stay editable and are covered by undo like any other change.
+
+## A contents page
+
+**Contents…** builds a table of contents for the document. Opening it fills the list from the files
+you merged — one entry per file, named after it — and from there you rename entries, point them at a
+different page, add your own, or remove them. The list always reads in page order, which is the order
+the finished contents page prints.
+
+The export gets two things, either of which can be switched off:
+
+- **A contents page at the front.** Every line is clickable and jumps to its page. The page numbers
+  printed down the right-hand side count the contents pages themselves, so they match what your
+  reader's own page counter shows.
+- **Bookmarks**, the entries a reader lists in its sidebar. The file opens with that sidebar showing.
+
+Entries are anchored to the page, not to a page *number*: reorder the document and an entry follows
+the page it points at. If you delete a page something pointed at, the dialog says so and that entry
+is left out rather than silently linking somewhere wrong.
+
+A contents page belongs to the whole document, so **Download PDF** adds it — extracting a few pages
+with **Split…** or with a selection does not drag one along.
 
 ## Images as pages
 
@@ -145,7 +167,19 @@ Annotations living *on the item* is what makes them follow a page when it is reo
 when a page is extracted twice, and fall under undo without any history code of their own.
 
 The same reasoning is why importing an image is a small change rather than a large one: `loadFile`
-converts it to a one-page PDF at the door, so nothing downstream ever learns that images exist.
+converts it to a one-page PDF at the door, so nothing downstream ever learns that images exist. And
+it is why a contents entry stores a `PageItem.id` rather than a page number — an entry tied to a
+position would point somewhere wrong the moment anything moved.
+
+### Two things the PDF spec will not forgive
+
+- **Links and bookmarks are hand-built.** pdf-lib has no API for either, so `toc.ts` writes the
+  `/Annots` and `/Outlines` dictionaries itself. The tests check them by loading the export with
+  pdf.js and resolving each destination to a real page, which is the only assertion that means
+  anything here.
+- **A title outside Latin-1 has to be UTF-16BE with a byte-order mark.** `PDFString.of('สารบัญ')`
+  produces mojibake; `PDFHexString.fromText` is what round-trips. Every title goes through the
+  latter.
 
 | Path | Role |
 | --- | --- |
@@ -157,6 +191,7 @@ converts it to a one-page PDF at the door, so nothing downstream ever learns tha
 | `src/lib/geometry.ts` | View↔PDF coordinate transforms |
 | `src/lib/drawAnnotations.ts` | Flattens marks into a page |
 | `src/lib/images.ts` | Turns an image into a one-page PDF at import time |
+| `src/lib/toc.ts` | Contents: seeding, layout, link annotations, the bookmark tree |
 | `src/lib/textLayer.ts` | Reads text a PDF already has, and decides if OCR is needed |
 | `src/lib/ocr.ts` | The two-pass extraction run: worker pool, progress, cancellation |
 | `src/components/` | The UI |
