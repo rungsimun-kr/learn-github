@@ -12,6 +12,8 @@ import {
   type Tool,
 } from './lib/annotations';
 import OcrDialog, { type OcrSettings } from './components/OcrDialog';
+import TocDialog from './components/TocDialog';
+import { emptyToc, seedFromFiles, type TocSettings } from './lib/toc';
 import { loadFile, pagesForDoc, PdfLoadError } from './lib/docs';
 import { extractText, type ExtractProgress, type PageText } from './lib/ocr';
 import { buildMarkdown, textDownload } from './lib/textExport';
@@ -42,7 +44,11 @@ export default function App() {
   const [future, setFuture] = useState<PageItem[][]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [dialog, setDialog] = useState<'split' | 'images' | 'ocr' | null>(null);
+  const [dialog, setDialog] = useState<'split' | 'images' | 'ocr' | 'toc' | null>(null);
+
+  // The contents list is part of the document's definition, not a one-off
+  // export setting, so it lives here and survives closing the dialog.
+  const [toc, setToc] = useState<TocSettings>(emptyToc);
 
   // Text extraction is long-running, so it gets its own progress state and an
   // abort handle rather than riding on the generic `busy` string.
@@ -64,6 +70,8 @@ export default function App() {
   pagesRef.current = pages;
   const docsRef = useRef(docs);
   docsRef.current = docs;
+  const tocRef = useRef(toc);
+  tocRef.current = toc;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const insertingRef = useRef(false);
@@ -297,6 +305,7 @@ export default function App() {
     setFuture([]);
     setError(null);
     setEditingPageId(null);
+    setToc(emptyToc());
     anchorRef.current = null;
   }, []);
 
@@ -318,13 +327,16 @@ export default function App() {
 
   const downloadPdf = useCallback(() => {
     const current = pagesRef.current;
-    const target = current.some((page) => page.selected)
-      ? current.filter((page) => page.selected)
-      : current;
+    const selecting = current.some((page) => page.selected);
+    const target = selecting ? current.filter((page) => page.selected) : current;
     if (target.length === 0) return;
 
+    // A contents page belongs to the whole document; a handful of extracted
+    // pages does not want one.
+    const contents = selecting ? undefined : tocRef.current;
+
     void runExport('Building PDF…', async () => {
-      const download = await exportSinglePdf(target, docsRef.current, baseName);
+      const download = await exportSinglePdf(target, docsRef.current, baseName, contents);
       triggerDownload(download.blob, download.filename);
     });
   }, [baseName, runExport]);
@@ -530,6 +542,13 @@ export default function App() {
         onSplit={() => setDialog('split')}
         onExportImages={() => setDialog('images')}
         onExtractText={() => setDialog('ocr')}
+        onContents={() => {
+          // Arrive with a usable list rather than an empty one.
+          if (toc.entries.length === 0 && pages.length > 0) {
+            setToc({ ...toc, entries: seedFromFiles(pages, docs) });
+          }
+          setDialog('toc');
+        }}
         onClear={clearAll}
       />
 
@@ -596,6 +615,16 @@ export default function App() {
           busy={busy !== null}
           onClose={() => setDialog(null)}
           onConfirm={confirmSplit}
+        />
+      ) : null}
+
+      {dialog === 'toc' ? (
+        <TocDialog
+          pages={pages}
+          docs={docs}
+          toc={toc}
+          onChange={setToc}
+          onClose={() => setDialog(null)}
         />
       ) : null}
 

@@ -18,6 +18,7 @@ interface ToolbarProps {
   onSplit: () => void;
   onExportImages: () => void;
   onExtractText: () => void;
+  onContents: () => void;
   onClear: () => void;
 }
 
@@ -42,6 +43,7 @@ export default function Toolbar(props: ToolbarProps) {
     onSplit,
     onExportImages,
     onExtractText,
+    onContents,
     onClear,
   } = props;
 
@@ -139,6 +141,15 @@ export default function Toolbar(props: ToolbarProps) {
       </div>
 
       <div className="toolbar-group toolbar-end">
+        <button
+          type="button"
+          className="button"
+          onClick={onContents}
+          disabled={busy || empty}
+          title="Add a contents page and bookmarks that jump to a page"
+        >
+          Contents…
+        </button>
         <button type="button" className="button" onClick={onExtractText} disabled={busy || empty}>
           Extract text…
         </button>

@@ -1,6 +1,7 @@
 import JSZip from 'jszip';
 import type { ImageFormat, LoadedDoc, PageItem } from '../types';
 import { buildPdf } from './build';
+import type { TocSettings } from './toc';
 import { openForRender } from './docs';
 import { safeFilename } from './download';
 import type { PageRange } from './ranges';
@@ -23,8 +24,9 @@ export async function exportSinglePdf(
   pages: readonly PageItem[],
   docs: ReadonlyMap<string, LoadedDoc>,
   baseName: string,
+  toc?: TocSettings,
 ): Promise<Download> {
-  const bytes = await buildPdf(pages, docs);
+  const bytes = await buildPdf(pages, docs, toc);
   return {
     blob: new Blob([bytes as unknown as BlobPart], { type: 'application/pdf' }),
     filename: `${safeFilename(baseName)}.pdf`,
